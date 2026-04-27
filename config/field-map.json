@@ -103,7 +103,7 @@
       "required": true,
       "note": "原币订单金额；币种从环境变量 ZOHO_DEFAULT_CURRENCY 取（默认 RMB），写入 field22"
     },
-    { "source": "订单导入者", "target": "field223", "type": "text", "required": true },
+    { "source": "业务员", "target": "field8", "type": "ownerlookup", "required": true, "note": "用户查找字段，姓名反查ZOHO user.id" },
     {
       "source": "订单所有者",
       "target": "Owner",

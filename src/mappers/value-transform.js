@@ -182,14 +182,15 @@ async function transformRow({ rawRow, fieldMap, defaultOwnerId, currency, lookup
         }
 
         case "ownerlookup": {
-          // 优先用表格「订单所有者」姓名反查 ZOHO user
+          // 用户查找：表格填姓名，反查 ZOHO user.id
+          // 支持 Owner（订单所有者）和其他用户查找字段（如 field8 业务员）
           const nameRaw = toStr(raw);
           let resolvedId = null;
           if (nameRaw && userResolver) {
             try {
               resolvedId = await userResolver(nameRaw);
             } catch (e) {
-              warnings.push(`订单所有者反查异常 「${nameRaw}」: ${e.message}`);
+              warnings.push(`${spec.source} 反查异常 「${nameRaw}」: ${e.message}`);
             }
           }
           if (!resolvedId) {
@@ -200,11 +201,16 @@ async function transformRow({ rawRow, fieldMap, defaultOwnerId, currency, lookup
               break;
             }
             if (nameRaw) {
-              warnings.push(`订单所有者「${nameRaw}」无法匹配 ZOHO 用户，已落回默认 owner`);
+              warnings.push(`${spec.source}「${nameRaw}」无法匹配 ZOHO 用户，已落回默认 owner`);
             }
             resolvedId = defaultOwnerId;
           }
-          payload.Owner = { id: resolvedId };
+          // 根据 target 决定写入哪个字段
+          if (spec.target === "Owner") {
+            payload.Owner = { id: resolvedId };
+          } else {
+            payload[spec.target] = { id: resolvedId };
+          }
           break;
         }
 
@@ -242,6 +248,17 @@ async function transformRow({ rawRow, fieldMap, defaultOwnerId, currency, lookup
   if (payload[fieldMap._constants.currencyField] === undefined &&
       payload.field20 !== undefined) {
     payload[fieldMap._constants.currencyField] = currency || fieldMap._constants.currencyDefault;
+  }
+
+  // 需求1：人民币快递金额 (field218) = 原币订单金额 (field20)
+  // 企微表格"10订单金额" → ZOHO field20（原币订单金额）+ field218（人民币快递金额）
+  if (payload.field20 !== undefined) {
+    payload.field218 = payload.field20;
+  }
+
+  // 需求3：订单状态 (field62) 默认值 = "正常"
+  if (payload.field62 === undefined) {
+    payload.field62 = "正常";
   }
 
   // 下单日期 (field90)：后端同步时刻的当天日期。企微表格里没有这一列，

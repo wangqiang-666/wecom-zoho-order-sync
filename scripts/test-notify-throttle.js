@@ -72,7 +72,7 @@ async function buildBadRow(sm) {
     "总页数":         [{ type: "text", text: "5" }],
     "彩打页数":        [{ type: "text", text: "0" }],
     "10订单金额":      [{ type: "text", text: "100" }],
-    "订单导入者":      [{ type: "text", text: "Erik" }],
+    "业务员":      [{ type: "text", text: "Erik" }],
     "订单所有者":      [{ type: "text", text: "Erik" }],
     "7签字盖章":       [{ type: "text", text: "无" }],
     "9附件数量": 1,

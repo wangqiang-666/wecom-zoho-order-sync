@@ -51,7 +51,7 @@ async function testMinimalPayload() {
         field179: "测试文件名",  // 需递交文件名
         field213: "10",  // 总页数
         field216: "测试文案",  // 文案
-        field223: "测试导入者",  // 订单导入者
+        field8: "测试业务员",  // 业务员
         field229: "测试使用地",  // 1公证书使用地
         field31: "否",  // 删除不负责证词
         field52: "普通",  // 供应商（picklist，先试个值）

@@ -89,7 +89,7 @@ async function buildRow(sheetMeta, orderNo, owner, suffix) {
     "总页数":         [{ type: "text", text: "5" }],
     "彩打页数":        [{ type: "text", text: "0" }],
     "10订单金额":      [{ type: "text", text: "888" }],
-    "订单导入者":      [{ type: "text", text: owner }],
+    "业务员":      [{ type: "text", text: owner }],
     "订单所有者":      [{ type: "text", text: owner }],
     "7签字盖章":       [{ type: "text", text: "无" }],
     "9附件数量": 1,

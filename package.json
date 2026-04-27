@@ -10,7 +10,7 @@
     "pull-meta": "node scripts/pull-zoho-meta.js"
   },
   "dependencies": {
-    "better-sqlite3": "^11.3.0",
+    "better-sqlite3": "^11.10.0",
     "dotenv": "^16.4.5",
     "node-cron": "^3.0.3",
     "node-xlsx": "^0.24.0",

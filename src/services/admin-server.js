@@ -72,6 +72,9 @@ function buildStatus() {
     "SELECT row_id, business_key, last_error, attempts, updated_at FROM sync_state WHERE status='failed' ORDER BY updated_at DESC LIMIT 10"
   ).all();
   return {
+    env: config.env,
+    isSandbox: config.isSandbox,
+    isProduction: config.isProduction,
     docid: config.wecom.sheet.docid,
     filter,
     pollIntervalSec: sec,
@@ -228,9 +231,12 @@ const HTML = `<!doctype html><html lang="zh-CN"><head>
   .field-item.locked label{color:#92400e;cursor:not-allowed}
   .toast{position:fixed;top:20px;right:20px;background:#16a34a;color:#fff;padding:12px 18px;border-radius:6px;box-shadow:0 4px 12px rgba(0,0,0,.15);opacity:0;transition:opacity .3s;pointer-events:none;z-index:9999}
   .toast.show{opacity:1}
+  .env-badge{display:inline-block;padding:4px 10px;border-radius:4px;font-size:12px;font-weight:600;margin-left:10px}
+  .env-sandbox{background:#fef3c7;color:#92400e}
+  .env-production{background:#fee2e2;color:#991b1b}
 </style>
 </head><body>
-<h1>📋 企微 → ZOHO 同步控制台</h1>
+<h1>📋 企微 → ZOHO 同步控制台 <span id="envBadge" class="env-badge">加载中...</span></h1>
 
 <div class="card">
   <h2>当前状态</h2>
@@ -259,8 +265,26 @@ const HTML = `<!doctype html><html lang="zh-CN"><head>
     成功后「导入状态」显示「导入成功」；失败后显示「导入失败: 原因」，用户修改数据后会自动重试。
   </div>
   <div class="row">
-    <button class="sec" onclick="runNow(this)">立即同步一次</button>
+    <label>录入冷静期</label>
+    <input type="number" id="cooldownSec" min="0" max="300" step="10" style="width:80px">
+    <span style="color:#666">秒</span>
+    <button onclick="saveCooldown(this)">保存</button>
+    <span id="cooldownBtnStatus" class="btn-status"></span>
+  </div>
+  <div class="muted" style="margin-bottom:12px">
+    <b>⚡ 实时性关键配置</b>：新行/修改的行等待多久后才扫描（默认120秒，最小0秒=立即）。<br>
+    设置为0秒可实现最快同步，但可能打扰正在录入的同事。建议10-30秒。
+  </div>
+  <div class="row">
+    <label>轮询兜底间隔</label>
+    <input type="number" id="intervalSec" min="30" max="300" step="5" style="width:80px">
+    <span style="color:#666">秒</span>
+    <button onclick="saveInterval(this)">保存</button>
     <span id="intervalBtnStatus" class="btn-status"></span>
+  </div>
+  <div class="muted" style="margin-bottom:12px">webhook失败时的兜底扫描间隔（默认60秒，最小30秒）</div>
+  <div class="row">
+    <button class="sec" onclick="runNow(this)">立即同步一次</button>
   </div>
   <div class="muted">扫描所有「是否确定导入」=「导入」的行并批量处理</div>
 </div>
@@ -308,7 +332,19 @@ const HTML = `<!doctype html><html lang="zh-CN"><head>
 async function refresh(){
   const r = await fetch('/api/status'); const s = await r.json();
   window._lastStatus = s;
+
+  // 更新环境标识
+  const envBadge = document.getElementById('envBadge');
+  if (s.isSandbox) {
+    envBadge.textContent = '🟢 沙盒环境';
+    envBadge.className = 'env-badge env-sandbox';
+  } else {
+    envBadge.textContent = '🔴 正式环境';
+    envBadge.className = 'env-badge env-production';
+  }
+
   document.getElementById('status').innerHTML =
+    '<div>运行环境</div><div>'+(s.isSandbox ? '🟢 沙盒 (sandbox)' : '🔴 正式 (production)')+'</div>'+
     '<div>docid</div><div>'+s.docid+'</div>'+
     '<div>触发模式</div><div>实时触发（webhook）</div>'+
     '<div>生效子表</div><div>'+(s.sheetsLive.map(x=>x.title).join(', ')||'(尚未初始化)')+'</div>'+
@@ -327,7 +363,9 @@ async function refresh(){
       '</div>'
     ).join('');
   }
-  // 不再需要 intervalSec 和 cooldownSec 的赋值
+  // 恢复轮询间隔和冷静期显示
+  document.getElementById('intervalSec').value = s.pollIntervalSec || 60;
+  document.getElementById('cooldownSec').value = s.rowCooldownSec !== undefined ? s.rowCooldownSec : 120;
   document.getElementById('notifyEnabled').checked = !!s.notifyEnabled;
   document.getElementById('notifyState').textContent = s.notifyEnabled ? '✅ 已开启' : '🔕 已关闭';
   document.getElementById('notifyState').className = s.notifyEnabled ? 'ok' : 'muted';
@@ -397,7 +435,26 @@ async function refreshSheets(btn){
   flashStatus('sheetBtnStatus', '✓ 已刷新');
   refresh();
 }
-// 删除 saveInterval 和 saveCooldown 函数
+async function saveCooldown(btn){
+  const sec = parseInt(document.getElementById('cooldownSec').value);
+  if (sec < 0) {
+    flashStatus('cooldownBtnStatus', '冷静期不能为负数', true);
+    return;
+  }
+  const r = await post('/api/cooldown', {sec});
+  flashStatus('cooldownBtnStatus', '✓ 已保存: ' + r.sec + '秒' + (r.sec === 0 ? ' (立即同步)' : ''));
+  refresh();
+}
+async function saveInterval(btn){
+  const sec = parseInt(document.getElementById('intervalSec').value);
+  if (!sec || sec < 30) {
+    flashStatus('intervalBtnStatus', '间隔最小30秒', true);
+    return;
+  }
+  const r = await post('/api/interval', {sec});
+  flashStatus('intervalBtnStatus', '✓ 已保存: ' + r.sec + '秒');
+  refresh();
+}
 async function runNow(btn){
   const r = await post('/api/run-now');
   if (r?.fired === false && r?.reason === 'locked') {
