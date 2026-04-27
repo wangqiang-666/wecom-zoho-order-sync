@@ -1,0 +1,47 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<!--
+  部署前请按实际路径修改：
+    1. ProgramArguments[0] 改为 `which node` 的绝对路径（通常 /opt/homebrew/bin/node 或 /usr/local/bin/node）
+    2. ProgramArguments[1] 改为 src/index.js 的绝对路径
+    3. WorkingDirectory  改为项目根目录绝对路径
+    4. 日志路径同上
+-->
+<plist version="1.0">
+<dict>
+    <key>Label</key>
+    <string>com.inotary.wecom-zoho-sync</string>
+
+    <key>ProgramArguments</key>
+    <array>
+        <string>/opt/homebrew/bin/node</string>
+        <string>/Users/yyzinotary/Documents/wecom-zoho-order-sync/src/index.js</string>
+    </array>
+
+    <key>WorkingDirectory</key>
+    <string>/Users/yyzinotary/Documents/wecom-zoho-order-sync</string>
+
+    <key>EnvironmentVariables</key>
+    <dict>
+        <key>PATH</key>
+        <string>/opt/homebrew/bin:/usr/local/bin:/usr/bin:/bin</string>
+        <key>NODE_ENV</key>
+        <string>production</string>
+    </dict>
+
+    <key>RunAtLoad</key>
+    <true/>
+
+    <key>KeepAlive</key>
+    <true/>
+
+    <key>ThrottleInterval</key>
+    <integer>30</integer>
+
+    <key>StandardOutPath</key>
+    <string>/Users/yyzinotary/Documents/wecom-zoho-order-sync/logs/stdout.log</string>
+
+    <key>StandardErrorPath</key>
+    <string>/Users/yyzinotary/Documents/wecom-zoho-order-sync/logs/stderr.log</string>
+</dict>
+</plist>

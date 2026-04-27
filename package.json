@@ -1,0 +1,22 @@
+{
+  "name": "wecom-zoho-order-sync",
+  "version": "0.1.0",
+  "description": "企业微信智能表格销售订单 → ZOHO CRM CustomModule18 同步服务",
+  "main": "src/index.js",
+  "scripts": {
+    "start": "node src/index.js",
+    "dev": "node --watch src/index.js",
+    "dry-run": "node scripts/dry-run.js",
+    "pull-meta": "node scripts/pull-zoho-meta.js"
+  },
+  "dependencies": {
+    "better-sqlite3": "^11.3.0",
+    "dotenv": "^16.4.5",
+    "node-cron": "^3.0.3",
+    "node-xlsx": "^0.24.0",
+    "winston": "^3.14.2"
+  },
+  "engines": {
+    "node": ">=20"
+  }
+}

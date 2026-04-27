@@ -1,0 +1,230 @@
+/**
+ * 主表 38 列 → ZOHO CustomModule18 字段精准映射
+ *
+ * 字段说明：
+ *   - source     : 主表列名（必须和企微表格列头完全一致）
+ *   - target     : ZOHO API name（来自 sandbox metadata）
+ *   - type       : ZOHO 字段类型，决定值的转换规则
+ *   - required   : 业务必填（从主表黄色标注得来）
+ *   - picklist   : 仅 picklist/multiselectpicklist 有效，可选值白名单（必须严格匹配）
+ *   - lookup     : 仅 lookup 有效，关联模块名（同步前需要把名称→record_id）
+ *   - note       : 备注，给人看
+ *
+ * 同步流程会按本表逐字段转换并校验。修改本文件后服务热加载，无需重启。
+ */
+{
+  "version": "2026-04-21",
+  "moduleApiName": "CustomModule18",
+  "fields": [
+    {
+      "source": "是否确定导入",
+      "target": "_LOCAL_",
+      "type": "local",
+      "note": "用户从下拉选择「导入」触发同步，系统处理后自动清空；失败时保持「导入」可重试"
+    },
+    {
+      "source": "导入状态",
+      "target": "_LOCAL_",
+      "type": "local",
+      "note": "本地状态字段，不写ZOHO；同步成功后回写为「已成功」"
+    },
+    {
+      "source": "渠道名称",
+      "target": "field50",
+      "type": "lookup",
+      "lookup": "Accounts",
+      "lookupSearchField": "Account_Name",
+      "required": true,
+      "note": "lookup → Accounts(客户/渠道)，按 Account_Name 搜索拿 record_id"
+    },
+    {
+      "source": "订单确认编号",
+      "target": "field235",
+      "type": "text"
+    },
+    {
+      "source": "文件存放路径",
+      "target": "field76",
+      "type": "text",
+      "required": true
+    },
+    {
+      "source": "公证主体中文名",
+      "target": "field6",
+      "type": "text",
+      "required": true,
+      "note": "对应 ZOHO「公司中文名」"
+    },
+    {
+      "source": "公证主体英文名",
+      "target": "field5",
+      "type": "text",
+      "note": "对应 ZOHO「公司英文名」"
+    },
+    {
+      "source": "1证词出具地",
+      "target": "field233",
+      "type": "text"
+    },
+    {
+      "source": "1业务类型",
+      "target": "field227",
+      "type": "text",
+      "note": "对应 ZOHO「业务类型【新】」"
+    },
+    {
+      "source": "业务细类",
+      "target": "field67",
+      "type": "lookup",
+      "lookup": "Products",
+      "lookupSearchField": "Product_Name",
+      "required": true,
+      "note": "lookup → Products(产品)，按 Product_Name 搜索"
+    },
+    {
+      "source": "1公证书使用地",
+      "target": "field229",
+      "type": "text",
+      "required": true,
+      "note": "对应 ZOHO「使用地」"
+    },
+    { "source": "2证词模版", "target": "field225", "type": "text" },
+    { "source": "3公证语言", "target": "field228", "type": "text" },
+    { "source": "4内容要求", "target": "field230", "type": "text" },
+    { "source": "5页面布局", "target": "field231", "type": "text" },
+    { "source": "6证词日期", "target": "field232", "type": "text" },
+    { "source": "7签字盖章", "target": "field234", "type": "text" },
+    { "source": "8装订方式", "target": "field224", "type": "text" },
+    { "source": "9附件数量", "target": "field25", "type": "integer", "required": true },
+    {
+      "source": "10订单金额",
+      "target": "field20",
+      "type": "double",
+      "required": true,
+      "note": "原币订单金额；币种从环境变量 ZOHO_DEFAULT_CURRENCY 取（默认 RMB），写入 field22"
+    },
+    { "source": "订单导入者", "target": "field223", "type": "text", "required": true },
+    {
+      "source": "订单所有者",
+      "target": "Owner",
+      "type": "ownerlookup",
+      "required": true,
+      "note": "ZOHO 系统字段，固定使用 ZOHO_DEFAULT_OWNER_EMAIL 反查到的 user_id；主表此列仅作展示"
+    },
+    {
+      "source": "主题",
+      "target": "Name",
+      "type": "text",
+      "required": true,
+      "note": "xlsx 标黄必填。企微端是公式列（公证主体中文名 & 第几单），API 返回公式结果，照读照插"
+    },
+    { "source": "第几单", "target": "field82", "type": "text" },
+    {
+      "source": "订单日期",
+      "target": "field",
+      "type": "date",
+      "required": true,
+      "note": "ZOHO API name 就叫 field（不是笔误）；格式 YYYY-MM-DD"
+    },
+    {
+      "source": "供应商",
+      "target": "field78",
+      "type": "picklist",
+      "required": true,
+      "picklist": [
+        "谢律师", "區律师", "程律师", "胡律师", "刘律师",
+        "北京海伢（代理）", "世瑞（代理）", "李绪峰-中国委托公证人",
+        "直接加签", "暂不选律师", "测试用公证人"
+      ]
+    },
+    { "source": "文案", "target": "field216", "type": "text", "required": true },
+    {
+      "source": "删除不负责证词",
+      "target": "field31",
+      "type": "picklist",
+      "required": true,
+      "picklist": ["是", "否"]
+    },
+    { "source": "其他注意事项", "target": "field36", "type": "textarea", "required": true },
+    { "source": "需递交文件名", "target": "field179", "type": "textarea", "required": true },
+    {
+      "source": "核证副本",
+      "target": "field193",
+      "type": "multiselectpicklist",
+      "picklist": [
+        "CI-公司注册证明书01", "NAR1-周年申报表02",
+        "ND2A-更改公司秘书及董事通知书（委任/停任）03",
+        "ND2B-更改公司秘书及董事详情通知书04",
+        "ND4-公司秘书及董事辞职通知书05",
+        "NNC2-更改公司名称通知书06",
+        "NR1-注册办事处地址更改通知书07",
+        "NR2-登记册及公司纪录备存地点通知书08",
+        "NSC1-股份配发申报书09",
+        "公司更改名称证明书10",
+        "有关商业登记号码作为唯一业务标识码的参考文件11",
+        "查阅董事数据12",
+        "AD-(中)更正已登记文件内在排印或文书方面的错误13",
+        "NNC1-法团成立表格（股份有限公司）14",
+        "公司资料报告15", "A&A-组织章程细则16",
+        "公司迄今仍注册证明书17", "BR-商业登记证18"
+      ],
+      "note": "多选用 ; 或 | 分隔"
+    },
+    {
+      "source": "普通副本",
+      "target": "field194",
+      "type": "multiselectpicklist",
+      "picklist": [
+        "CI-公司注册证明书01", "NAR1-周年申报表02",
+        "ND2A-更改公司秘书及董事通知书（委任/停任）03",
+        "ND2B-更改公司秘书及董事详情通知书04",
+        "ND4-公司秘书及董事辞职通知书05",
+        "NNC2-更改公司名称通知书06",
+        "NR1-注册办事处地址更改通知书07",
+        "NR2-登记册及公司纪录备存地点通知书08",
+        "NSC1-股份配发申报书09",
+        "公司更改名称证明书10",
+        "有关商业登记号码作为唯一业务标识码的参考文件11",
+        "查阅董事数据12",
+        "AD-(中)更正已登记文件内在排印或文书方面的错误13",
+        "NNC1-法团成立表格（股份有限公司）14",
+        "公司资料报告15", "A&A-组织章程细则16",
+        "公司迄今仍注册证明书17", "BR-商业登记证18"
+      ]
+    },
+    {
+      "source": "总页数",
+      "target": "field213",
+      "type": "text",
+      "required": true,
+      "note": "⚠ ZOHO 这里是 text 不是 integer，原样写入字符串"
+    },
+    {
+      "source": "彩打页数",
+      "target": "field28",
+      "type": "integer",
+      "required": true,
+      "note": "对应 ZOHO「彩打数量」"
+    },
+    { "source": "钢印数量", "target": "field26", "type": "integer" },
+    {
+      "source": "签字数量",
+      "target": "field103",
+      "type": "integer",
+      "note": "对应 ZOHO「律师签名数量」"
+    },
+    { "source": "原件寄件单号", "target": "field171", "type": "text" },
+    { "source": "空单", "target": "field185", "type": "boolean" },
+    {
+      "source": "是否急单",
+      "target": "field52",
+      "type": "picklist",
+      "note": "picklist 白名单待和 ZOHO 端实际选项对齐后再补；目前原样传值，ZOHO 端会校验"
+    }
+  ],
+  "_constants": {
+    "currencyField": "field22",
+    "currencyDefault": "RMB",
+    "currencyAllowed": ["RMB", "HKD", "USD", "EUR", "AUD"]
+  }
+}

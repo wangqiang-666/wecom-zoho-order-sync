@@ -1,0 +1,49 @@
+# ============================================================
+# wecom-zoho-order-sync 生产环境 Compose 配置
+#
+# 关键保障（长期运行 + 断电恢复）：
+#   - restart: unless-stopped → 容器崩溃/Docker 重启/机器重启后自动拉起
+#   - 数据卷挂载 ./data ./logs → 容器重建不丢数据
+#   - healthcheck → 容器状态可观测，异常时自动重启
+#   - WECOM_CALLBACK_HOST=0.0.0.0 → 容器内必须监听所有网卡，端口映射才生效
+# ============================================================
+
+services:
+  wecom-zoho-order-sync:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    image: wecom-zoho-order-sync:latest
+    container_name: wecom-zoho-order-sync
+    restart: unless-stopped
+
+    # .env 文件里的 ZOHO 凭证、企微凭证、表格 docid 等全部注入
+    env_file:
+      - .env
+
+    # 覆盖 .env 中的几个本地专用值，确保容器内行为正确
+    environment:
+      - WECOM_CALLBACK_HOST=0.0.0.0
+      - NODE_ENV=production
+
+    ports:
+      - "3300:3300"   # 管理 UI
+      - "8080:8080"   # 企微回调
+
+    volumes:
+      - ./data:/app/data       # SQLite 数据库持久化
+      - ./logs:/app/logs       # 日志持久化（便于排查 + 不随容器删除）
+      - ./config:/app/config:ro  # 字段映射等配置（只读）
+
+    healthcheck:
+      test: ["CMD", "wget", "--spider", "-q", "http://127.0.0.1:3300/"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 30s
+
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "5"

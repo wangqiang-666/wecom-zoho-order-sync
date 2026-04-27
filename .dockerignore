@@ -1,0 +1,29 @@
+# 排除本地构建产物和敏感/大文件
+node_modules
+npm-debug.log
+
+# 数据和日志由 volume 挂载，不进镜像
+data
+logs
+
+# 备份的沙盒配置不进镜像（容器里只有正式环境的 .env）
+.env.sandbox.backup
+
+# IDE / OS 杂项
+.DS_Store
+.vscode
+.idea
+
+# git 目录
+.git
+.gitignore
+
+# 文档（不需要进镜像）
+README.md
+DEPLOY-SECRETS.md
+docs
+
+# Docker 自己的文件
+Dockerfile
+docker-compose.yml
+.dockerignore
