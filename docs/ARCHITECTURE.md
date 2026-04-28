@@ -36,7 +36,7 @@ wecom-zoho-order-sync/
 │   │   ├── logger.js             # winston 日志
 │   │   ├── db.js                 # SQLite：sync_state、notify_queue、app_config
 │   │   ├── runtime-config.js     # 运行时配置（DB优先，.env兜底）
-│   │   └── file-no.js            # 文件编号生成器（IN/NP/<客户编号>/<5位随机>/<年>）
+│   │   └── file-no.js            # 文件编号生成器（IN/NP/<客户编号>/<A-Z+4位数字>/<年>，全局按年顺序计数）
 ├── config/
 │   └── field-map.json            # 主表 ↔ ZOHO 映射，支持热改不重启
 ├── data/

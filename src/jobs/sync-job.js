@@ -119,6 +119,14 @@ async function ensureOwnerId() {
 
 async function processOne(row, { dryRun, customerCodeCache, inflightFileNos, requiredOverride, lockedSources, cooldownMs }) {
   let existing = db.getRow(row.rowId);
+
+  // 已经在企微侧显示完成的行，一律视为历史记录。
+  // 这层保护不依赖本地 SQLite，避免重部署/换库后旧的「导入」触发位再次创建 ZOHO。
+  if (isAlreadyImported(row)) {
+    logger.info("⏭ 行%d 企微导入状态已完成（%s），跳过创建", row.rowIndex, row.status);
+    return { skipped: true, reason: "already imported status" };
+  }
+
   // 录入冷静期：行 hash 跟 DB 不一致 + 距上次变化还不到 cooldown → 视为"还在录入中"
   // 只更新 last_change_ts/hash，不做 ZOHO 写入，也不回写失败状态
   // 好处：同事连续填多个字段不会在每次 tick 就被校验报错打断
@@ -285,6 +293,7 @@ async function processOne(row, { dryRun, customerCodeCache, inflightFileNos, req
         isFileNoUsed: (no) => !!db.findFileNo(no) || (inflightFileNos && inflightFileNos.has(no)),
         markUsed: (no) => { if (inflightFileNos) inflightFileNos.add(no); },
         customerCodeCache,
+        dryRun,
       });
       fileNoValue = gen.fileNo;
       logger.info("📄 生成文件编号 行%d 渠道=「%s」 → %s (客户编号=%s)",
@@ -374,6 +383,18 @@ function isPendingImport(row) {
   return String(row.data["是否确定导入"] || "").trim() === "导入";
 }
 
+function isAlreadyImported(row) {
+  const status = String(row.status || "").trim();
+  // 仅拦截"明确成功"的状态，不拦截"导入中"/"导入失败"
+  // 理由：
+  //   - "导入中"：可能是上次崩溃残留，必须允许重试，否则用户无法恢复
+  //   - "导入失败: xxx"：用户改内容后会自动重试，是核心功能不能拦
+  //   - 只看"导入成功"前缀 + "已导入"：这两个表示 ZOHO 一定已存在记录
+  if (status === "已导入") return true;
+  if (status.startsWith(sheet.STATUS_SUCCESS)) return true;  // "导入成功" / "导入成功 (zoho=xxx)"
+  return false;
+}
+
 async function processRows(rows, { dryRun = false, onlyPendingImport = false, cooldownMs = 0 } = {}) {
   const requiredOverride = runtimeConfig.getRequiredFieldsOverride();
   const lockedSources = config.getLockedRequiredSources();
@@ -381,7 +402,9 @@ async function processRows(rows, { dryRun = false, onlyPendingImport = false, co
 
   // 测试白名单：SYNC_ORDER_NO_WHITELIST_PREFIX=TEST- 时，仅处理订单确认编号以该前缀开头的行
   const whitelistPrefix = process.env.SYNC_ORDER_NO_WHITELIST_PREFIX || "";
-  let filteredRows = onlyPendingImport ? rows.filter(isPendingImport) : rows;
+  let filteredRows = onlyPendingImport
+    ? rows.filter((r) => isPendingImport(r) && !isAlreadyImported(r))
+    : rows;
   stats.total = filteredRows.length;
   if (whitelistPrefix) {
     const before = filteredRows.length;
@@ -600,6 +623,15 @@ async function processSingleRow(rowId, { dryRun = false } = {}) {
     if (!row) {
       logger.warn("⚠ 未找到 rowId=%s，可能已被删除", rowId);
       return { error: "row not found" };
+    }
+
+    // 🛡 webhook 路径的最前置硬保护：
+    // 不管 DB 有没有记录，只要企微表格状态显示已成功/已导入/处理中/含zoho=
+    // → 这行的 ZOHO 记录已经存在，绝不能再次 POST
+    // 这层保护是防御"重部署/换库后 DB 没记录但企微状态还在"的关键
+    if (isAlreadyImported(row)) {
+      logger.info("⏭ webhook 行%d 企微状态已完成（%s），跳过创建", row.rowIndex, row.status);
+      return { skipped: true, reason: "already imported status" };
     }
 
     // 已同步行的处理规则（与 processOne 一致）：

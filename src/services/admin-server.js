@@ -307,7 +307,7 @@ const HTML = `<!doctype html><html lang="zh-CN"><head>
   </div>
   <div style="background:#eff6ff;border-left:3px solid #2563eb;padding:10px 14px;margin-bottom:14px;border-radius:4px;font-size:12px;color:#1e40af">
     <b>📌 后端自动处理的字段（无需配置、无需录入）</b><br>
-    • <b>文件编号</b>（field73）：每条订单写 ZOHO 前由后端按 <code>IN/NP/&lt;客户编号&gt;/&lt;5位随机&gt;/&lt;年&gt;</code> 自动生成，本地查重，永不重复。<br>
+    • <b>文件编号</b>（field73）：每条订单写 ZOHO 前由后端按 <code>IN/NP/&lt;客户编号&gt;/&lt;A-Z+4位数字&gt;/&lt;年&gt;</code> 自动生成（如 <code>IN/NP/12421/A0001/2026</code>），本地计数器持久化，支持在本地计数丢失时从 ZOHO 近期记录恢复。<br>
     • <b>记录归属人</b>（Owner）：固定使用 <code>ZOHO_DEFAULT_OWNER_EMAIL</code> 配置的负责人。
   </div>
   <div id="requiredFieldsGrid" class="field-grid muted">加载中...</div>

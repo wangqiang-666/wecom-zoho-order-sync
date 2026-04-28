@@ -76,6 +76,22 @@ db.exec(`
     value        TEXT NOT NULL,
     updated_at   INTEGER NOT NULL
   );
+
+  -- 文件编号顺序计数器（A0001..Z9999 全局按年递增）
+  --   year       自然年（PRIMARY KEY）
+  --   last_seq   该年已发出的最大整数序号（A0001=1, A9999=9999, B0001=10000, Z9999=259974）
+  --   seed_source 'local' / 'zoho-rebuild' / 'init'，便于排查计数器是怎么得到的
+  --   updated_at 最近一次推进时间
+  -- 设计要点：
+  --   - 每次发号通过 SQLite 事务原子自增（reserve+commit），保证唯一与有序
+  --   - 不存字符串 'A0001'，存整数游标，渲染时再格式化
+  --   - CREATE TABLE IF NOT EXISTS：迁移安全，已有数据不会被覆盖
+  CREATE TABLE IF NOT EXISTS file_no_counter (
+    year         INTEGER PRIMARY KEY,
+    last_seq     INTEGER NOT NULL,
+    seed_source  TEXT,
+    updated_at   INTEGER NOT NULL
+  );
 `);
 
 // 历史 DB 迁移：sync_state 表原本没有 file_no 列，老实例需要补一列（加不上就是已经有了）
@@ -163,6 +179,29 @@ const stmts = {
     ON CONFLICT(key) DO UPDATE SET value = excluded.value, updated_at = excluded.updated_at
   `),
   listConfig: db.prepare(`SELECT key, value, updated_at FROM app_config ORDER BY key`),
+  getFileNoCounter: db.prepare(`SELECT year, last_seq, seed_source, updated_at FROM file_no_counter WHERE year = ?`),
+  upsertFileNoCounter: db.prepare(`
+    INSERT INTO file_no_counter (year, last_seq, seed_source, updated_at)
+    VALUES (@year, @last_seq, @seed_source, @updated_at)
+    ON CONFLICT(year) DO UPDATE SET
+      last_seq = CASE
+        WHEN excluded.last_seq > file_no_counter.last_seq THEN excluded.last_seq
+        ELSE file_no_counter.last_seq
+      END,
+      seed_source = excluded.seed_source,
+      updated_at = excluded.updated_at
+  `),
+  updateFileNoCounterIfEq: db.prepare(`
+    UPDATE file_no_counter
+    SET last_seq = @next_seq,
+        seed_source = @seed_source,
+        updated_at = @updated_at
+    WHERE year = @year AND last_seq = @expected_last_seq
+  `),
+  insertFileNoCounterIfMissing: db.prepare(`
+    INSERT OR IGNORE INTO file_no_counter (year, last_seq, seed_source, updated_at)
+    VALUES (@year, @last_seq, @seed_source, @updated_at)
+  `),
   // 脏标只删 <= snapshot 的，保护"runOnce 跑中途新进来的事件"不被吞
   clearDirtyIfBefore: db.prepare(`
     DELETE FROM app_config
@@ -331,6 +370,61 @@ module.exports = {
   },
   listConfig() {
     return stmts.listConfig.all();
+  },
+
+  // ---------- 文件编号计数器（A0001..Z9999 全局按年递增） ----------
+  getFileNoCounter(year) {
+    return stmts.getFileNoCounter.get(year);
+  },
+
+  // 用恢复值 / 初始化值写入 counter：只会把计数器抬高，不会回退
+  seedFileNoCounter(year, lastSeq, seedSource = "local") {
+    const ts = now();
+    stmts.upsertFileNoCounter.run({
+      year,
+      last_seq: lastSeq,
+      seed_source: seedSource,
+      updated_at: ts,
+    });
+    return stmts.getFileNoCounter.get(year);
+  },
+
+  // 原子预留下一号：
+  //   - 若该年不存在且 allowInit=true，则先以 initSeq 初始化（通常是 0 或 ZOHO 恢复出的 max）
+  //   - 然后把 last_seq + 1 预留出来并立即提交
+  // 设计取舍：
+  //   - 预留成功后即推进 counter，不等 ZOHO POST 成功
+  //   - 这样最安全地保证"永不重复、严格有序"，代价是失败时可能产生少量空洞号
+  //   - 用户优先要求不重复，其次才是连续无空洞；空洞号可接受，重复号不可接受
+  reserveNextFileNoSeq(year, { allowInit = false, initSeq = 0, seedSource = "local" } = {}) {
+    const tx = db.transaction(() => {
+      let row = stmts.getFileNoCounter.get(year);
+      if (!row) {
+        if (!allowInit) return null;
+        stmts.insertFileNoCounterIfMissing.run({
+          year,
+          last_seq: initSeq,
+          seed_source: seedSource,
+          updated_at: now(),
+        });
+        row = stmts.getFileNoCounter.get(year);
+      }
+      const nextSeq = row.last_seq + 1;
+      stmts.updateFileNoCounterIfEq.run({
+        year,
+        expected_last_seq: row.last_seq,
+        next_seq: nextSeq,
+        seed_source: row.seed_source || seedSource,
+        updated_at: now(),
+      });
+      return {
+        year,
+        seq: nextSeq,
+        previousSeq: row.last_seq,
+        seedSource: row.seed_source || seedSource,
+      };
+    });
+    return tx();
   },
 
   // ---------- 扫描触发：webhook 标脏 + cron 消费 ----------

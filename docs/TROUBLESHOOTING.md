@@ -162,21 +162,28 @@ grep "在多个子表重复" logs/app.log | tail -10
 
 ### 6. 文件编号生成失败
 
-**现象：** 导入状态显示"文件编号生成失败"或"重试50次仍生成不到不冲突随机段"
+**现象：** 导入状态显示"文件编号生成失败"或"无法预留文件编号"等错误
 
 **原因：** 极少见，可能是：
-- 数据库损坏
+- 数据库损坏 / 计数器表丢失
 - 并发冲突检测异常
+- ZOHO Accounts 中找不到该渠道（无法解析客户编号；不再走 TMP 兜底，会直接抛错）
 
 **解决方案：**
 ```bash
 # 1. 检查数据库
-sqlite3 data/orders.db "SELECT COUNT(*) FROM sync_state WHERE file_no IS NOT NULL;"
+sqlite3 data/orders_prod.db "SELECT COUNT(*) FROM sync_state WHERE file_no IS NOT NULL;"
 
-# 2. 检查日志
-grep "randomSegment 异常" logs/app.log
+# 2. 检查计数器
+sqlite3 data/orders_prod.db "SELECT year, last_seq, seed_source, datetime(updated_at/1000,'unixepoch','localtime') FROM file_no_counter;"
 
-# 3. 如果确实出现，联系开发人员
+# 3. 检查日志
+grep -E "无法预留文件编号|无法生成文件编号|生成到已存在的文件编号" logs/app.log
+
+# 4. 如果计数器丢失，可手工重新种子（举例 2026 年从 A0001 起步）：
+sqlite3 data/orders_prod.db "INSERT OR IGNORE INTO file_no_counter (year, last_seq, seed_source, updated_at) VALUES (2026, 0, 'manual-init', $(date +%s)000);"
+
+# 5. 如果上面都正常但仍报错，联系开发人员
 ```
 
 ---
