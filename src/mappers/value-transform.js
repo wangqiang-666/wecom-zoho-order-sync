@@ -261,11 +261,10 @@ async function transformRow({ rawRow, fieldMap, defaultOwnerId, currency, lookup
     payload.field62 = "正常";
   }
 
-  // 下单日期 (field90)：后端同步时刻的当天日期。企微表格里没有这一列，
-  // 语义是"订单录入系统的日期"而非"客户下单日期"，所以用 new Date()
-  if (payload.field90 === undefined) {
-    payload.field90 = new Date().toISOString().slice(0, 10);
-  }
+  // 下单日期 (field90)：已停用 - 不对此字段进行任何操作，插入时保持空白
+  // if (payload.field90 === undefined) {
+  //   payload.field90 = new Date().toISOString().slice(0, 10);
+  // }
 
   return errors.length === 0
     ? { ok: true, payload, warnings }
