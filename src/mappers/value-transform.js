@@ -250,10 +250,11 @@ async function transformRow({ rawRow, fieldMap, defaultOwnerId, currency, lookup
     payload[fieldMap._constants.currencyField] = currency || fieldMap._constants.currencyDefault;
   }
 
-  // 需求1：人民币快递金额 (field218) = 原币订单金额 (field20)
-  // 企微表格"10订单金额" → ZOHO field20（原币订单金额）+ field218（人民币快递金额）
-  if (payload.field20 !== undefined) {
-    payload.field218 = payload.field20;
+  // 派生汇率 (field21)：默认币种 RMB 时汇率=1
+  // ZOHO 端 field23（人民币订单金额）是公式字段 = field20 × field21，API 不可直写
+  // 故必须写 field21，由 ZOHO 自动算出 field23
+  if (payload.field20 !== undefined && payload.field21 === undefined) {
+    payload.field21 = 1;
   }
 
   // 需求3：订单状态 (field62) 默认值 = "正常"
