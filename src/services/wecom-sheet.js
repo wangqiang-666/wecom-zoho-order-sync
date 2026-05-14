@@ -511,6 +511,7 @@ module.exports = {
   updateConfirmImport,
   hashRow,
   invalidateMeta,
+  refreshAllRefDicts,  // 供 sync-job 每次同步前主动刷新字典
   api,  // 供测试脚本使用
   // 调试
   _docMeta: docMeta,

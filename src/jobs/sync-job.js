@@ -547,6 +547,15 @@ async function _runOnceInternal({ dryRun = false } = {}) {
   const cooldownMs = runtimeConfig.getRowCooldownSec() * 1000;
 
   try {
+    // 每次同步前主动刷一次 Reference 字典（渠道/业务细类等）
+    // 保证读出来的行数据用的是企微端最新名字（避免改名后缓存陈旧把新名字解析成旧名字）
+    // 失败不阻断同步：refreshAllRefDicts 内部已逐字典 try/catch，失败时保留旧缓存
+    try {
+      await sheet.refreshAllRefDicts();
+    } catch (e) {
+      logger.warn("同步前刷新字典失败（保留旧缓存继续）: %s", e.message);
+    }
+
     let rows;
     try {
       rows = await sheet.readRows();
