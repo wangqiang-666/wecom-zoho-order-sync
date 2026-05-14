@@ -42,10 +42,18 @@ function parseDate(v) {
   const s = toStr(v);
   if (s === "") return null;
   // 企微 FIELD_TYPE_DATE_TIME 返回毫秒时间戳（13 位）
+  // 用户在表格上选的日期是北京时间 00:00:00；toISOString() 会把它转成 UTC 前一天 16:00,
+  // slice(0,10) 得到的就是前一天的日期 → 写到 ZOHO 永远早一天。
+  // 修复：按 Asia/Shanghai 时区格式化为 YYYY-MM-DD，让"用户选哪天就写哪天"。
   if (/^\d{13}$/.test(s)) {
     const d = new Date(Number(s));
     if (isNaN(d.getTime())) return undefined;
-    return d.toISOString().slice(0, 10);
+    return new Intl.DateTimeFormat("en-CA", {
+      timeZone: "Asia/Shanghai",
+      year: "numeric",
+      month: "2-digit",
+      day: "2-digit",
+    }).format(d);
   }
   // 支持 2026/04/21、2026-04-21、2026年4月21日
   const m = s.match(/(\d{4})[\/\-年](\d{1,2})[\/\-月](\d{1,2})/);

@@ -296,6 +296,11 @@ async function processOne(row, { dryRun, customerCodeCache, inflightFileNos, req
         dryRun,
       });
       fileNoValue = gen.fileNo;
+      // field184: 渠道编号（Accounts.field62 完整原始值，如 A14637）
+      // 跟文件编号同源：取自渠道客户的 ZOHO 账号客户编号字段，订单上自动回填
+      if (gen.customerCodeRaw) {
+        result.payload.field184 = gen.customerCodeRaw;
+      }
       logger.info("📄 生成文件编号 行%d 渠道=「%s」 → %s (客户编号=%s)",
         row.rowIndex, customerName, fileNoValue, gen.customerCode);
     }

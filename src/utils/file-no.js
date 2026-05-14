@@ -121,11 +121,13 @@ async function resolveCustomerCode({ customerName, zohoFetch, customerCodeCache 
   const criteria = encodeURIComponent(`(Account_Name:equals:${escaped})`);
 
   let code = null;
+  let codeRaw = null; // 完整原始值（如 A14637），写到订单 field184
   let accountId = null;
   try {
     const resp = await zohoFetch(`/Accounts/search?criteria=${criteria}`);
     const rec = resp && resp.data && resp.data[0];
     if (rec) {
+      codeRaw = rec.field62 ? String(rec.field62).trim() : null;
       code = extractCustomerCode(rec.field62);
       accountId = rec.id || null;
     }
@@ -141,7 +143,7 @@ async function resolveCustomerCode({ customerName, zohoFetch, customerCodeCache 
     throw new Error(msg);
   }
 
-  const out = { customerCode: code, accountId };
+  const out = { customerCode: code, customerCodeRaw: codeRaw, accountId };
   if (customerCodeCache) customerCodeCache.set(customerName, out);
   return out;
 }
@@ -171,7 +173,7 @@ async function generateForCustomer({
   if (typeof isFileNoUsed !== "function") throw new Error("generateForCustomer: 缺少 isFileNoUsed");
   if (typeof markUsed !== "function") throw new Error("generateForCustomer: 缺少 markUsed");
 
-  const { customerCode, accountId } = await resolveCustomerCode({ customerName, zohoFetch, customerCodeCache });
+  const { customerCode, customerCodeRaw, accountId } = await resolveCustomerCode({ customerName, zohoFetch, customerCodeCache });
   const year = now.getFullYear();
 
   let counter = db.getFileNoCounter(year);
@@ -215,7 +217,7 @@ async function generateForCustomer({
       continue;
     }
     markUsed(fileNo);
-    return { fileNo, customerCode, accountId, seq, segment };
+    return { fileNo, customerCode, customerCodeRaw, accountId, seq, segment };
   }
 
   throw new Error(`重试 ${attempts} 次仍生成不到不冲突文件编号，请检查历史数据与计数器状态`);

@@ -116,6 +116,13 @@ const _refCacheBySubId = {};   // subId -> { recordId: displayText }
 const _refDictMetaBySubId = {}; // subId -> { sheetId, title }
 const _refReloadingBySubId = {};
 
+// 字典定时刷新：进程内字典缓存只在启动时加载，遇到"未知 record_id"才重载。
+// 历史问题：如果字典里某条已存在的条目被改名（record_id 不变，名字变了），
+// 后端缓存永远拿不到新名字，会持续把旧名字写入下游系统（已发生过 96 单错渠道事故）。
+// 修复：每 REF_REFRESH_INTERVAL_MS 主动全量重载一次，原子替换缓存，失败不影响主链路。
+const REF_REFRESH_INTERVAL_MS = 10 * 60 * 1000; // 10 分钟
+let _refRefreshTimer = null;
+
 function flattenCell(val) {
   if (val === null || val === undefined) return "";
   if (Array.isArray(val) && val.length && val[0]?.text !== undefined) {
@@ -166,6 +173,9 @@ async function initMeta({ force = false } = {}) {
 
   // 所有子表字段扫完后统一准备 Reference 字典（跨表共享）
   await prepareReferenceResolvers();
+
+  // 字典定时刷新（幂等：内部判断已启动则跳过；force 重新 init 不会重复启动）
+  startRefRefreshTimer();
 
   logger.info("[wecom-sheet] ✅ 元数据就绪 目标子表=%d [%s]",
     sheetMetas.size, [...sheetMetas.values()].map((m) => m.title).join(", "));
@@ -294,6 +304,58 @@ async function loadDictSheet(dictSheet) {
     }
   }
   return out;
+}
+
+// 定时刷新所有 Reference 字典：
+// 单次失败不影响下次定时；单个字典失败不影响其他字典；新缓存原子替换旧缓存（不会出现读到一半的状态）。
+// 设计上故意使用 setTimeout 链式调度而不是 setInterval：
+//   - 重载本身可能耗时（多个字典加起来可能 10s+），interval 会堆积；
+//   - 链式调度保证"上次完成 → 等10分钟 → 下次开始"，不会并发跑。
+async function refreshAllRefDicts() {
+  const subIds = Object.keys(_refDictMetaBySubId);
+  if (!subIds.length) return;
+  const startedAt = Date.now();
+  let okCount = 0;
+  let failCount = 0;
+  let changedCount = 0;
+  for (const subId of subIds) {
+    try {
+      const fresh = await loadDictSheet(_refDictMetaBySubId[subId]);
+      const old = _refCacheBySubId[subId] || {};
+      // 检测改名：record_id 相同但显示名变了，是这次修复要解决的核心问题，单独打日志
+      let renamed = 0;
+      for (const rid of Object.keys(fresh)) {
+        if (old[rid] !== undefined && old[rid] !== fresh[rid]) renamed += 1;
+      }
+      _refCacheBySubId[subId] = fresh; // 原子替换
+      okCount += 1;
+      if (renamed > 0) {
+        changedCount += renamed;
+        logger.info("[wecom-sheet] 字典 sub_id=%s「%s」检测到 %d 条改名，已应用最新名称",
+          subId, _refDictMetaBySubId[subId].title, renamed);
+      }
+    } catch (e) {
+      failCount += 1;
+      logger.warn("[wecom-sheet] 定时刷新字典 sub_id=%s 失败（保留旧缓存）: %s", subId, e.message);
+    }
+  }
+  logger.info("[wecom-sheet] 字典定时刷新完成 ok=%d fail=%d 改名=%d 耗时=%dms",
+    okCount, failCount, changedCount, Date.now() - startedAt);
+}
+
+function startRefRefreshTimer() {
+  if (_refRefreshTimer) return; // 进程内幂等，重复调用安全
+  const tick = () => {
+    refreshAllRefDicts()
+      .catch((e) => logger.error("[wecom-sheet] 字典定时刷新意外异常: %s", e.message))
+      .finally(() => {
+        _refRefreshTimer = setTimeout(tick, REF_REFRESH_INTERVAL_MS);
+        if (_refRefreshTimer.unref) _refRefreshTimer.unref(); // 不阻挡进程退出
+      });
+  };
+  _refRefreshTimer = setTimeout(tick, REF_REFRESH_INTERVAL_MS);
+  if (_refRefreshTimer.unref) _refRefreshTimer.unref();
+  logger.info("[wecom-sheet] 字典定时刷新已启动: 每 %d 分钟", REF_REFRESH_INTERVAL_MS / 60000);
 }
 
 // ---------- 业务行哈希 ----------
